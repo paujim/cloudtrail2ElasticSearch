@@ -1,16 +1,15 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"context"
 
-	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
@@ -20,41 +19,44 @@ func main() {
 	lambda.Start(HandleRequest)
 }
 
-type EventDetail struct {
-	EventVersion string `json:"eventVersion"`
-	UserIdentity struct {
-		Type           string `json:"type"`
-		PrincipalID    string `json:"principalId"`
-		Arn            string `json:"arn"`
-		AccountID      string `json:"accountId"`
-		SessionContext struct {
-			Attributes struct {
-				MfaAuthenticated string    `json:"mfaAuthenticated"`
-				CreationDate     time.Time `json:"creationDate"`
-			} `json:"attributes"`
-		} `json:"sessionContext"`
-	} `json:"userIdentity"`
-	EventTime         time.Time `json:"eventTime"`
-	EventSource       string    `json:"eventSource"`
-	EventName         string    `json:"eventName"`
-	AwsRegion         string    `json:"awsRegion"`
-	SourceIPAddress   string    `json:"sourceIPAddress"`
-	UserAgent         string    `json:"userAgent"`
-	RequestParameters struct {
-		BucketName string `json:"bucketName"`
-	} `json:"requestParameters"`
-	ResponseElements interface{} `json:"responseElements"`
-	RequestID        string      `json:"requestID"`
-	EventID          string      `json:"eventID"`
-	EventType        string      `json:"eventType"`
+type CloudTrailEvent struct {
+	Version    string      `json:"version"`
+	ID         string      `json:"id"`
+	DetailType string      `json:"detail-type"`
+	Source     string      `json:"source"`
+	AccountID  string      `json:"account"`
+	Time       time.Time   `json:"time"`
+	Region     string      `json:"region"`
+	Resources  []string    `json:"resources"`
+	Detail     interface{} `json:"detail"`
 }
 
-func HandleRequest(ctx context.Context, event events.CloudWatchEvent) error {
-	log.Print(event)
+type CloudTrailEventDetail struct {
+	EventVersion      string      `json:"eventVersion"`
+	UserIdentity      interface{} `json:"userIdentity"`
+	EventTime         time.Time   `json:"eventTime"`
+	EventSource       string      `json:"eventSource"`
+	EventName         string      `json:"eventName"`
+	AwsRegion         string      `json:"awsRegion"`
+	SourceIPAddress   string      `json:"sourceIPAddress"`
+	UserAgent         string      `json:"userAgent"`
+	RequestParameters interface{} `json:"requestParameters"`
+	ResponseElements  interface{} `json:"responseElements"`
+	RequestID         string      `json:"requestID"`
+	EventID           string      `json:"eventID"`
+	EventType         string      `json:"eventType"`
+}
+
+func HandleRequest(ctx context.Context, event CloudTrailEvent) error {
+
 	domain := os.Getenv("ES_HOST")
-	index := "iam-user-" + event.Time.Format("2006-01-02")
-	endpoint := domain + "/" + index + "/" + "_doc" + "/"
 	region := os.Getenv("ES_REGION")
+
+	index := "iam-user-" + event.Time.Format("2006-01-02")
+	log.Println("INDEX:")
+	log.Println(index)
+	endpoint := domain + "/" + index + "/" + "_doc" + "/"
+
 	service := "es"
 
 	b, err := json.Marshal(event)
@@ -63,9 +65,10 @@ func HandleRequest(ctx context.Context, event events.CloudWatchEvent) error {
 		return err
 	}
 
-	// json := string(b)
-	// body := strings.NewReader(json)
-	body := bytes.NewReader(b)
+	json := string(b)
+	log.Println("EVENT:")
+	log.Print(json)
+	body := strings.NewReader(json)
 
 	// credentials := credentials.NewSharedCredentials("", "devops")
 	credentials := credentials.NewEnvCredentials()

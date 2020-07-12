@@ -10,7 +10,8 @@ import (
 
 	"context"
 
-	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	"github.com/aws/aws-sdk-go/aws/session"
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 )
 
@@ -47,6 +48,7 @@ func (h *LambdaHandler) Handle(ctx context.Context, event CloudTrailEvent) error
 
 	domain := os.Getenv("ES_HOST")
 	region := os.Getenv("ES_REGION")
+	esRole := os.Getenv("ES_ROLE")
 
 	log.Printf("ES_HOST: %s\n", domain)
 	log.Printf("ES_REGION: %s\n", region)
@@ -62,7 +64,8 @@ func (h *LambdaHandler) Handle(ctx context.Context, event CloudTrailEvent) error
 	log.Print(json)
 	body := strings.NewReader(json)
 
-	credentials := credentials.NewEnvCredentials()
+	credentials := stscreds.NewCredentials(session.Must(session.NewSession()), esRole)
+
 	signer := v4.NewSigner(credentials)
 	req, err := http.NewRequest(http.MethodPost, endpoint, body)
 	if err != nil {
